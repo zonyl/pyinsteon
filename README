@@ -1,0 +1,32 @@
+File:
+        pyinsteon.py
+
+Description:
+        Insteon Home Automation Protocol library for Python (Smarthome 2412N, 2412S, 2412U)
+        
+        For more information regarding the technical details of the PLM:
+                http://www.smarthome.com/manuals/2412sdevguide.pdf
+
+Author(s): 
+         Jason Sharpee <jason@sharpee.com>  http://www.sharpee.com
+
+        Based loosely on the Insteon_PLM.pm code:
+        -       Expanded by Gregg Liming <gregg@limings.net>
+
+License:
+    This free software is licensed under the terms of the GNU public license, Version 1     
+
+Usage:
+    - Instantiate PyInsteon by passing in an interface
+    - Call its methods
+    - ?
+    - Profit
+
+    example: 
+    pyI = PyInsteon(TCP("192.168.1.1","9761"))
+    pyI.getVersion()
+    select.select([],[],[])   
+
+Notes:
+
+Created on Mar 26, 2011
