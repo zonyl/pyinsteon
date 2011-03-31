@@ -29,6 +29,8 @@ Usage:
     select.select([],[],[])   
 
 Notes:
+    - Integrate Mahmul dict's and event dispatch
+    - Read Style Guide @: http://www.python.org/dev/peps/pep-0008/
 
 Created on Mar 26, 2011
 '''
@@ -70,6 +72,57 @@ class PLM_COMMANDS:
     rf_sleep                ='0272'
     plm_get_config          ='0273'
 
+''' mahmul @ #python
+import pprint
+keys = ('insteon_received',
+        'insteon_ext_received',
+        'x10_received',
+        'all_link_complete',
+        'plm_button_event',
+        'user_user_reset',
+        'all_link_clean_failed',
+        'all_link_record',
+        'all_link_clean_status',
+        'plm_info',
+        'all_link_send',
+        'insteon_send',
+        'insteon_ext_send',
+        'x10_send',
+        'all_link_start',
+        'all_link_cancel',
+        'plm_reset',
+        'all_link_first_rec',
+        'all_link_next_rec',
+        'plm_set_config',
+        'plm_led_on',
+        'plm_led_off',
+        'all_link_manage_rec',
+        'insteon_nak',
+        'insteon_ack',
+        'rf_sleep',
+        'plm_get_config')
+
+commands = dict(zip(xrange(0x250, 0x273), keys))
+pprint.pprint(commands)
+
+def rf_sleep(*args):
+    print 'called rf_sleep with', args
+
+def get_config(*args):
+    print 'called get_config with', args
+    print 'calling rf_sleep...'
+    rf_sleep(args)
+
+def dispatcher(datum):
+    callback = {'plm_get_config': get_config,
+                'rf_sleep': rf_sleep}.get(commands[datum])
+    if callback:
+        callback(1)
+
+dispatcher(0x26a)
+dispatcher(0x259)
+
+'''
 
 class Interface(threading.Thread):
 #class Interface:
@@ -101,11 +154,11 @@ class TCP(Interface):
         return None
     
     def run(self):
-        self.__handle_receive()
+        self._handle_receive()
         
 
         
-    def __handle_receive(self):
+    def _handle_receive(self):
         while 1:
             data = self.__s.recv(1024)
             self.c(data)
@@ -123,10 +176,12 @@ class USB(Interface):
 
 class MessageTypes:
     #Message Types as integers
+    direct=             0
     broadcast=          1
     group=              2
-    acknowledge=        3
-
+    acknowledge=        4
+    group_broadcast=    6
+    
 class InsteonCommand:
     #Commands in Hex
     on=                '11'
@@ -141,36 +196,52 @@ class PyInsteon(HAProtocol):
     def __init__(self, interface):
         super(PyInsteon, self).__init__(interface)        
         self.__i = interface
-        self.__i.onReceive(self.__handle_received)
+        self.__i.onReceive(self._handle_received)
         self.__dataReceived = threading.Event()
         self.__dataReceived.clear()
+        self.__callback_x10 = None
+        self.__callback_insteon = None
         return None
     
-    def __handle_received(self,data):
+    def _handle_received(self,data):
         "Decode packet"
-        print "Data Received=>" + binascii.hexlify(data)
-        dataString = binascii.hexlify(data)
-        plm_command = dataString[0:4]   
-#        print "fffff:"  + plm_command + ":" + dataString
-        #lambda here?  ahhh maybe next time ;)
+        dataHex = binascii.hexlify(data)
+        print "Data Received=>" + dataHex
+        #SwitchLinc 025019057b000001cb1100 025019057b16f9ec411101
+        #X10 02520d00 02520380
+        #Mystery packet from PLM -- Data Received=>024a00
+        plm_command = dataHex[0:4]   
+        #<mahmul> zonyl: you know, you could use a dispatch dict and functions instead those if clauses
         if PLM_COMMANDS.plm_info == plm_command:
-            self.__version=dataString[14:16]
+            self.__version=dataHex[14:16]
         elif PLM_COMMANDS.insteon_received == plm_command or PLM_COMMANDS.insteon_ext_received == plm_command:
-            fromAddress =   dataString[4:5] + "." + dataString[6:7] + "." +  dataString[8:9] 
-            toAddress =     dataString[10:11] + "." + dataString[12:13] + "." +  dataString[14:15]
-            messageType =   (int(dataString[16:17],16) & 0b11100000) >> 5 #3 MSB
-            extended =      (int(dataString[16:17],16) & 0b00010000) >> 4 #4th MSB
-            hopsLeft =      (int(dataString[16:17],16) & 0b00001100) >> 2 #3-2nd MSB
-            hopsMax =       (int(dataString[16:17],16) & 0b00000011)  #0-1 MSB
-            # could have also used ord(binascii.unhexlify(dataString[16:17])) & 0b11100000
-            command1=       dataString[17:17]
-            command2=       dataString[18:18]
-            print "Insteon=>From=>%s To=>%s MessageType=>%s Extended=>%s HopsLeft=>%s HopsMax=>%s Command1=>%s Command2=>%s" % \
-                (fromAddress, toAddress, messageType, extended, hopsLeft, hopsMax, command1, command2)
-            #self.__callback_insteon(fromAddress,toAddress,MessageType,extended,hopsLeft,hopsMax,command1,command2)
+            fromAddress =       dataHex[4:6] + "." + dataHex[6:8] + "." +  dataHex[8:10] 
+            toAddress =         dataHex[10:12] + "." + dataHex[12:14] + "." +  dataHex[14:16]
+            group =             dataHex[14:16] # overlapped into toAddress if a group call is made
+            messageType =       (int(dataHex[16:18],16) & 0b11100000) >> 5 #3 MSB
+            messageDirect =     ((int(dataHex[16:18],16) & 0b11100000) >> 5)==0
+            messageAcknowledge =((int(dataHex[16:18],16) & 0b00100000) >> 5)>0
+            messageGroup =      ((int(dataHex[16:18],16) & 0b01000000) >> 6)>0
+            messageBroadcast =  ((int(dataHex[16:18],16) & 0b10000000) >> 7)>0
+            extended =          (int(dataHex[16:18],16) & 0b00010000) >> 4 #4th MSB
+            hopsLeft =          (int(dataHex[16:18],16) & 0b00001100) >> 2 #3-2nd MSB
+            hopsMax =           (int(dataHex[16:18],16) & 0b00000011)  #0-1 MSB
+            # could have also used ord(binascii.unhexlify(dataHex[16:17])) & 0b11100000
+            command1=       dataHex[18:20]
+            command2=       dataHex[20:22]
+            print "Insteon=>From=>%s To=>%s Group=> %s MessageType=>%s MD=>%s MB=>%s MG=>%s MA=>%s Extended=>%s HopsLeft=>%s HopsMax=>%s Command1=>%s Command2=>%s" % \
+                (fromAddress, toAddress, group, messageType, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2)
+            if self.__callback_insteon != None:
+                self.__callback_insteon(fromAddress, toAddress, group, messageType, extended, hopsLeft, hopsMax, command1, command2)
             pass
         elif PLM_COMMANDS.x10_received == plm_command:
-            #self.__calback_x10()
+            houseCode =     (int(dataHex[4:6],16) & 0b11110000) >> 4 
+            keyCode =       (int(dataHex[4:6],16) & 0b00001111)
+            unitCode =      (int(dataHex[6:8],16) & 0b11110000) >> 4
+            commandCode =   (int(dataHex[6:8],16) & 0b00001111)
+            print "X10=>House=>%s Key=>%s Unit=>%s Command=>%s" % (houseCode, keyCode, unitCode, commandCode)
+            if self.__callback_x10 != None:
+                self.__calback_x10(houseCode, keyCode, unitCode, commandCode)
             pass
             
         
