@@ -120,18 +120,30 @@ class USB(Interface):
     pass
     def __init__(self, device):
         return None
+
+class MessageTypes:
+    #Message Types as integers
+    broadcast=          1
+    group=              2
+    acknowledge=        3
+
+class InsteonCommand:
+    #Commands in Hex
+    on=                '11'
     
-class HAProtocol:
+class HAProtocol(object):
     "Base protocol interface"
+    def __init__(self, interface):
+        pass
     
 class PyInsteon(HAProtocol):
     "The Main event"
-    def __init__(self, Interface):
-        self.__i = Interface
+    def __init__(self, interface):
+        super(PyInsteon, self).__init__(interface)        
+        self.__i = interface
         self.__i.onReceive(self.__handle_received)
         self.__dataReceived = threading.Event()
         self.__dataReceived.clear()
-        
         return None
     
     def __handle_received(self,data):
@@ -143,6 +155,23 @@ class PyInsteon(HAProtocol):
         #lambda here?  ahhh maybe next time ;)
         if PLM_COMMANDS.plm_info == plm_command:
             self.__version=dataString[14:16]
+        elif PLM_COMMANDS.insteon_received == plm_command or PLM_COMMANDS.insteon_ext_received == plm_command:
+            fromAddress =   dataString[4:5] + "." + dataString[6:7] + "." +  dataString[8:9] 
+            toAddress =     dataString[10:11] + "." + dataString[12:13] + "." +  dataString[14:15]
+            messageType =   (int(dataString[16:17],16) & 0b11100000) >> 5 #3 MSB
+            extended =      (int(dataString[16:17],16) & 0b00010000) >> 4 #4th MSB
+            hopsLeft =      (int(dataString[16:17],16) & 0b00001100) >> 2 #3-2nd MSB
+            hopsMax =       (int(dataString[16:17],16) & 0b00000011)  #0-1 MSB
+            # could have also used ord(binascii.unhexlify(dataString[16:17])) & 0b11100000
+            command1=       dataString[17:17]
+            command2=       dataString[18:18]
+            print "Insteon=>From=>%s To=>%s MessageType=>%s Extended=>%s HopsLeft=>%s HopsMax=>%s Command1=>%s Command2=>%s" % \
+                (fromAddress, toAddress, messageType, extended, hopsLeft, hopsMax, command1, command2)
+            #self.__callback_insteon(fromAddress,toAddress,MessageType,extended,hopsLeft,hopsMax,command1,command2)
+            pass
+        elif PLM_COMMANDS.x10_received == plm_command:
+            #self.__calback_x10()
+            pass
             
         
         self.__dataReceived.set()
@@ -155,8 +184,16 @@ class PyInsteon(HAProtocol):
 
     def send(self,data):
         self.__dataReceived.clear()
-        self.__i.send(PLM_COMMANDS.plm_info)
+        self.__i.send(data)
 
+    def onReceivedX10(self, callback):
+        self.__callback_x10=callback
+        return
+    
+    def onReceivedInsteon(self, callback):
+        self.__callback_insteon=callback
+        return
+    
 
 if __name__ == "__main__":
     pyI = PyInsteon(TCP(HOST, PORT))
