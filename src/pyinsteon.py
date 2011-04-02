@@ -43,7 +43,7 @@ HOST='192.168.13.146'
 PORT=9761
 
 #PLM Serial Commands
-class PLM_COMMANDS:
+class PLM_COMMANDS(object):
     insteon_received        ='0250'
     insteon_ext_received    ='0251'
     x10_received            ='0252'
@@ -123,9 +123,34 @@ dispatcher(0x26a)
 dispatcher(0x259)
 
 '''
-class InsteonCommand:
+class InsteonCommand(object):
     #Commands in Hex
-    on=                '11'
+    on =                 '11'
+    fast_on =            '12'
+    off =                '19'
+    fast_off =           '20'
+    
+class X10Command(object):
+    all_lights_off =        0
+    status_off =            1
+    on =                    2
+    preset_dim =            3
+    all_lights_on =         4
+    hail_acknowledge =      5
+    bright =                6
+    status_on =             7
+    extended_code =         8
+    status_request =        9
+    off =                   10
+    preset_dim2 =           11
+    all_units_off =         12
+    hail_request =          13
+    dim =                   14
+    extended_data =         15
+    
+class X10Type(object):
+    unit_code =             0
+    command_code =          0x80
 
 class Interface(threading.Thread):
     def __init__(self, host, port):
@@ -182,6 +207,7 @@ class HAProtocol(object):
     
 class PyInsteon(HAProtocol):
     "The Main event"
+    
     def __init__(self, interface):
         super(PyInsteon, self).__init__(interface)        
         self.__i = interface
@@ -190,12 +216,15 @@ class PyInsteon(HAProtocol):
         self.__dataReceived.clear()
         self.__callback_x10 = None
         self.__callback_insteon = None
+        self.__x10UnitCode = None
         return None
     
     def _handle_received(self,data):
         "Decode packet"
         dataHex = binascii.hexlify(data)
         print "Data Received=>" + dataHex
+        group = None
+        userData = None
         #SwitchLinc 025019057b000001cb1100 025019057b16f9ec411101
         #X10 02520d00 02520380
         #Mystery packet from PLM -- Data Received=>024a00
@@ -206,11 +235,12 @@ class PyInsteon(HAProtocol):
         elif PLM_COMMANDS.insteon_received == plm_command or PLM_COMMANDS.insteon_ext_received == plm_command:
             fromAddress =       dataHex[4:6] + "." + dataHex[6:8] + "." +  dataHex[8:10] 
             toAddress =         dataHex[10:12] + "." + dataHex[12:14] + "." +  dataHex[14:16]
-            group =             dataHex[14:16] # overlapped into toAddress if a group call is made
 #            messageType =       (int(dataHex[16:18],16) & 0b11100000) >> 5 #3 MSB
             messageDirect =     ((int(dataHex[16:18],16) & 0b11100000) >> 5)==0
             messageAcknowledge =((int(dataHex[16:18],16) & 0b00100000) >> 5)>0
             messageGroup =      ((int(dataHex[16:18],16) & 0b01000000) >> 6)>0
+            if messageGroup:
+                group =             dataHex[14:16] # overlapped into toAddress if a group call is made
             messageBroadcast =  ((int(dataHex[16:18],16) & 0b10000000) >> 7)>0
             extended =          ((int(dataHex[16:18],16) & 0b00010000) >> 4)>0 #4th MSB
             hopsLeft =          (int(dataHex[16:18],16) & 0b00001100) >> 2 #3-2nd MSB
@@ -218,22 +248,38 @@ class PyInsteon(HAProtocol):
             # could have also used ord(binascii.unhexlify(dataHex[16:17])) & 0b11100000
             command1=       dataHex[18:20]
             command2=       dataHex[20:22]
-            print "Insteon=>From=>%s To=>%s Group=> %s MessageD=>%s MB=>%s MG=>%s MA=>%s Extended=>%s HopsLeft=>%s HopsMax=>%s Command1=>%s Command2=>%s" % \
-                (fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2)
+            if extended:
+                userData =      dataHex[22:36]
+            
+            print "Insteon=>From=>%s To=>%s Group=> %s MessageD=>%s MB=>%s MG=>%s MA=>%s Extended=>%s HopsLeft=>%s HopsMax=>%s Command1=>%s Command2=>%s UD=>%s" % \
+                (fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, userData)
             if self.__callback_insteon != None:
-                self.__callback_insteon(fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2)
+                self.__callback_insteon(fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, userData)
             pass
         elif PLM_COMMANDS.x10_received == plm_command:
+            "X10 sends commands fully in two separate messages"
+            unitCode = None
+            commandCode = None
             houseCode =     (int(dataHex[4:6],16) & 0b11110000) >> 4 
             keyCode =       (int(dataHex[4:6],16) & 0b00001111)
-            unitCode =      (int(dataHex[6:8],16) & 0b11110000) >> 4
-            commandCode =   (int(dataHex[6:8],16) & 0b00001111)
-            print "X10=>House=>%s Key=>%s Unit=>%s Command=>%s" % (houseCode, keyCode, unitCode, commandCode)
-            if self.__callback_x10 != None:
-                self.__calback_x10(houseCode, keyCode, unitCode, commandCode)
-            pass
+            flag =          int(dataHex[6:8],16)
+            if flag == X10Type.unit_code:
+                    unitCode = keyCode
+            elif flag == X10Type.command_code:
+                    commandCode = keyCode
+            print "X10=>House=>%s Unit=>%s Command=>%s Flag=%s" % (houseCode, unitCode, commandCode, flag)
+            if flag == X10Type.unit_code:
+                print "X10: Beginning transmission X10=>House=>%s Unit=>%s" % (houseCode, unitCode)
+                self.__x10UnitCode = unitCode
+            elif flag == X10Type.command_code:
+                print "Fully formed X10=>House=>%s Unit=>%s Command=>%s" % (houseCode, self.__x10UnitCode, commandCode)
+                #Only send fully formed messages
+                if self.__callback_x10 != None:
+                    self.__calback_x10(houseCode, self.__x10UnitCode, commandCode)
+                self.__x10UnitCode = None
+                
             
-        
+        #Let other threads know data has been received and processed
         self.__dataReceived.set()
         
 
@@ -243,43 +289,55 @@ class PyInsteon(HAProtocol):
         return self.__version
 
     def _send(self,data):
+        #We are starting a new transmission, clear any blocks on receive
         self.__dataReceived.clear()
         self.__i.send(data)
 
     def sendInsteon(self, fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data):
         messageType=0
-        #todo make this really work
         if extended==False:
             dataString  = PLM_COMMANDS.insteon_send
         else:
             dataString = PLM_COMMANDS.insteon_ext_send
         dataString += fromAddress[0:2] + fromAddress[3:5] + fromAddress[6:7]
         dataString += toAddress[0:2] + toAddress[3:5] + toAddress[6:7]
+        if messageAcknowledge:
+            messageType=messageType | 0b00100000
+        if messageGroup:
+            messageType=messageType | 0b01000000
+        if messageBroadcast:
+            messageType=messageType | 0b10000000
+        #Message Direct clears all other bits.. sorry thats the way it works
         if messageDirect:
             messageType=0
-        if messageBroadcast:
-            pass
-        if messageAcknowledge:
-            pass
-        if messageGroup:
-            pass
         if extended:
-            pass
-        dataString += hopsLeft
-        dataString += hopsMax
+            messageType=messageType | 0b00010000
+        messageType = messageType | (hopsLeft  << 2)
+        messageType = messageType | hopsMax
+        dataString += binascii.hexlify(messageType)
         dataString += command1
         dataString += command2
-        dataString += data
-        #crc goes here
+        if extended:
+            dataString += data
+
+        #crc goes here?
+
+        print "InsteonSend=>%s" % (dataString)
         self._send(dataString)
         
-    def sendX10(self, houseCode, keyCode, unitCode, commandCode):
+    def sendX10(self, houseCode, unitCode, commandCode):
         dataString = PLM_COMMANDS.x10_send
-        #todo bit wrangling
-        dataString+= binascii.hexlify(int(houseCode,16))
-        dataString+= binascii.hexlify(int(keyCode,16))
-        dataString+= binascii.hexlify(int(unitCode,16))
-        dataString+= binascii.hexlify(int(commandCode,16))
+        firstByte = houseCode << 4
+        firstByte = firstByte | unitCode
+        dataString+= binascii.hexlify(firstByte)
+        dataString+= binascii.hexlify(X10Type.unit_code)
+        self._send(dataString)
+        #wait for acknowledge
+        self.__dataReceived.wait(1000)
+        firstByte = houseCode << 4
+        firstByte = firstByte | commandCode
+        dataString+= binascii.hexlify(firstByte)
+        dataString+= binascii.hexlify(X10Type.command_code)
         self._send(dataString)
         
     def onReceivedX10(self, callback):
