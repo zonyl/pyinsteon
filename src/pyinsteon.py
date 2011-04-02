@@ -31,6 +31,8 @@ Usage:
     select.select([],[],[])   
 
 Notes:
+    - Only support 2412N right now
+    - Insteon is not quite finished / untested
     - Read Style Guide @: http://www.python.org/dev/peps/pep-0008/
 
 Created on Mar 26, 2011
@@ -81,10 +83,10 @@ keys = ('insteon_received',
         '',
         '',
         '',
+        '',
         'plm_info',
         'all_link_send',
         'insteon_send',
-        'insteon_ext_send',
         'x10_send',
         'all_link_start',
         'all_link_cancel',
@@ -335,6 +337,8 @@ class PyInsteon(HAProtocol):
         self.__dataReceived.clear()
         self.__i.send(dataHex)
         #Slow down the interface when sending.  Takes a while and can overrun easily
+        #todo make this adaptable based on Ack / Nak rates
+        # Of interest is that the controller will return an Ack before it is finished sending, so overrun wont be seen until next send
         time.sleep(.5)
 
     def sendInsteon(self, fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data):
@@ -374,7 +378,7 @@ class PyInsteon(HAProtocol):
         "Send Fully formed X10 Unit / Command"
         self.sendX10Unit(houseCode, unitCode)
 
-        #wait for acknowledge
+        #wait for acknowledge.
         self.__dataReceived.wait(1000)
                 
         self.sendX10Command(houseCode, commandCode)
