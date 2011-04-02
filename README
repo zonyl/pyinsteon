@@ -1,3 +1,4 @@
+'''
 File:
         pyinsteon.py
 
@@ -9,6 +10,8 @@ Description:
 
 Author(s): 
          Jason Sharpee <jason@sharpee.com>  http://www.sharpee.com
+         mahmul @ #python
+         Ene Uran 01/19/2008    http://www.daniweb.com/software-development/python/code/217019
 
         Based loosely on the Insteon_PLM.pm code:
         -       Expanded by Gregg Liming <gregg@limings.net>
@@ -22,11 +25,24 @@ Usage:
     - ?
     - Profit
 
-    example: 
-    pyI = PyInsteon(TCP("192.168.1.1","9761"))
+Example: (see bottom of file) 
+
+    def x10_received(houseCode, unitCode, commandCode):
+        print 'X10 Received: %s%s->%s' % (houseCode, unitCode, commandCode)
+
+    def insteon_received(*params):
+        print 'Insteon REceived:', params
+
+    pyI = PyInsteon(TCP('192.168.0.1', 9671))
     pyI.getVersion()
+    pyI.sendX10('m', '2', 'on')
+    pyI.onReceivedX10(x10_received)
+    pyI.onReceivedInsteon(insteon_received)
     select.select([],[],[])   
 
 Notes:
+    - Only support 2412N right now
+    - Insteon is not quite finished / untested
+    - Read Style Guide @: http://www.python.org/dev/peps/pep-0008/
 
 Created on Mar 26, 2011

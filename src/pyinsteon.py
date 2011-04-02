@@ -25,9 +25,19 @@ Usage:
     - ?
     - Profit
 
-    example: 
-    pyI = PyInsteon(TCP("192.168.1.1","9761"))
+Example: (see bottom of file) 
+
+    def x10_received(houseCode, unitCode, commandCode):
+        print 'X10 Received: %s%s->%s' % (houseCode, unitCode, commandCode)
+
+    def insteon_received(*params):
+        print 'Insteon REceived:', params
+
+    pyI = PyInsteon(TCP('192.168.0.1', 9671))
     pyI.getVersion()
+    pyI.sendX10('m', '2', 'on')
+    pyI.onReceivedX10(x10_received)
+    pyI.onReceivedInsteon(insteon_received)
     select.select([],[],[])   
 
 Notes:
@@ -251,7 +261,6 @@ class PyInsteon(HAProtocol):
     def _handle_received(self,data):
         dataHex = binascii.hexlify(data)
         print "Data Received=>" + dataHex
-#        plm_command = binascii.unhexlify(dataHex[0:4])   
         plm_command = int(dataHex[0:4],16)
         print "Command->%d %s '%s'" % (plm_command,plm_command,PLM_Commands.get_key(plm_command))
         callback = { 
@@ -277,7 +286,6 @@ class PyInsteon(HAProtocol):
 
         fromAddress =       dataHex[4:6] + "." + dataHex[6:8] + "." +  dataHex[8:10] 
         toAddress =         dataHex[10:12] + "." + dataHex[12:14] + "." +  dataHex[14:16]
-#            messageType =       (int(dataHex[16:18],16) & 0b11100000) >> 5 #3 MSB
         messageDirect =     ((int(dataHex[16:18],16) & 0b11100000) >> 5)==0
         messageAcknowledge =((int(dataHex[16:18],16) & 0b00100000) >> 5)>0
         messageGroup =      ((int(dataHex[16:18],16) & 0b01000000) >> 6)>0
@@ -293,7 +301,7 @@ class PyInsteon(HAProtocol):
         if extended:
             userData =      dataHex[22:36]
         
-        print "Insteon=>From=>%s To=>%s Group=> %s MessageD=>%s MB=>%s MG=>%s MA=>%s Extended=>%s HopsLeft=>%s HopsMax=>%s Command1=>%s Command2=>%s UD=>%s" % \
+        #print "Insteon=>From=>%s To=>%s Group=> %s MessageD=>%s MB=>%s MG=>%s MA=>%s Extended=>%s HopsLeft=>%s HopsMax=>%s Command1=>%s Command2=>%s UD=>%s" % \
             (fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, userData)
         if self.__callback_insteon != None:
             self.__callback_insteon(fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, userData)
@@ -311,21 +319,20 @@ class PyInsteon(HAProtocol):
         if flag == X10_Types['unit_code']:
             unitCode = keyCode
             unitCodeDec = X10_Unit_Codes.get_key(unitCode)
-            print "X10: Beginning transmission X10=>House=>%s Unit=>%s" % (houseCodeDec, unitCodeDec)
+            #print "X10: Beginning transmission X10=>House=>%s Unit=>%s" % (houseCodeDec, unitCodeDec)
             self.__x10UnitCode = unitCodeDec
         elif flag == X10_Types['command_code']:
             commandCode = keyCode
             commandCodeDec = X10_Command_Codes.get_key(commandCode)
-            print "Fully formed X10=>House=>%s Unit=>%s Command=>%s" % (houseCodeDec, self.__x10UnitCode, commandCodeDec)
+            #print "Fully formed X10=>House=>%s Unit=>%s Command=>%s" % (houseCodeDec, self.__x10UnitCode, commandCodeDec)
             #Only send fully formed messages
             if self.__callback_x10 != None:
-                self.__calback_x10(houseCodeDec, self.__x10UnitCode, commandCodeDec)
+                self.__callback_x10(houseCodeDec, self.__x10UnitCode, commandCodeDec)
             self.__x10UnitCode = None
             
     def getVersion(self):
         "Get PLM firmware version #"
 #        self.__i.send(PLM_COMMANDS.plm_info)
-        pprint.pprint(PLM_Commands)
         
         self.__i.send("%04x" %PLM_Commands['plm_info'])
         self.__dataReceived.wait(1000)
@@ -419,15 +426,24 @@ class PyInsteon(HAProtocol):
         "Set callback for reception of an Insteon message"
         self.__callback_insteon=callback
         return
-    
 
+######################
+# EXAMPLE            #
+######################
+
+def x10_received(houseCode, unitCode, commandCode):
+    print 'X10 Received: %s%s->%s' % (houseCode, unitCode, commandCode)
+
+def insteon_received(*params):
+    print 'Insteon Received:', params
+    
 if __name__ == "__main__":
     pyI = PyInsteon(TCP(HOST, PORT))
+    pyI.onReceivedX10(x10_received)
+    pyI.onReceivedInsteon(insteon_received)
     pyI.getVersion()
     pyI.sendX10('m', '2', 'on')
     pyI.sendX10('m', '1', 'on')
     pyI.sendX10('m', '1', 'off')
     select.select([],[],[])
-    
-    
     
