@@ -47,72 +47,49 @@ Notes:
 
 Created on Mar 26, 2011
 '''
-import socket
-import threading
-import binascii
 import select
 import time
-import pprint
+import binascii
+import threading
+from hacommon import HAProtocol, TCP, Lookup
 
-HOST='192.168.13.146'
-PORT=9761
-
-class Lookup(dict):
-    """
-    a dictionary which can lookup value by key, or keys by value
-    # tested with Python25 by Ene Uran 01/19/2008    http://www.daniweb.com/software-development/python/code/217019
-    """
-    def __init__(self, items=[]):
-        """items can be a list of pair_lists or a dictionary"""
-        dict.__init__(self, items)
-    def get_key(self, value):
-        """find the key as a list given a value"""
-        items = [item[0] for item in self.items() if item[1] == value]
-        return items[0]   
-     
-    def get_keys(self, value):
-        """find the key(s) as a list given a value"""
-        return [item[0] for item in self.items() if item[1] == value]
-    def get_value(self, key):
-        """find the value given a key"""
-        return self[key]
 
 #PLM Serial Commands
-keys = ('insteon_received',
-        'insteon_ext_received',
-        'x10_received',
-        'all_link_complete',
-        'plm_button_event',
-        'user_user_reset',
-        'all_link_clean_failed',
-        'all_link_record',
-        'all_link_clean_status',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        'plm_info',
-        'all_link_send',
-        'insteon_send',
-        'x10_send',
-        'all_link_start',
-        'all_link_cancel',
-        'plm_reset',
-        'all_link_first_rec',
-        'all_link_next_rec',
-        'plm_set_config',
-        'plm_led_on',
-        'plm_led_off',
-        'all_link_manage_rec',
-        'insteon_nak',
-        'insteon_ack',
-        'rf_sleep',
-        'plm_get_config')
-
-PLM_Commands = Lookup(zip(keys,xrange(0x250, 0x273)))
+PLM_Commands = Lookup(zip(
+                          ('insteon_received',
+                        'insteon_ext_received',
+                        'x10_received',
+                        'all_link_complete',
+                        'plm_button_event',
+                        'user_user_reset',
+                        'all_link_clean_failed',
+                        'all_link_record',
+                        'all_link_clean_status',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        'plm_info',
+                        'all_link_send',
+                        'insteon_send',
+                        'x10_send',
+                        'all_link_start',
+                        'all_link_cancel',
+                        'plm_reset',
+                        'all_link_first_rec',
+                        'all_link_next_rec',
+                        'plm_set_config',
+                        'plm_led_on',
+                        'plm_led_off',
+                        'all_link_manage_rec',
+                        'insteon_nak',
+                        'insteon_ack',
+                        'rf_sleep',
+                        'plm_get_config'
+                        ),xrange(0x250, 0x273)))
 #pprint.pprint(commands)
 
 Insteon_Commmand_Codes = Lookup({
@@ -123,7 +100,7 @@ Insteon_Commmand_Codes = Lookup({
                                  })
     
 ### Possibly error in Insteon Documentation regarding command mapping of preset dim and off
-keys = (
+X10_Command_Codes = Lookup(zip((
         'all_lights_off',
         'status_off',
         'on',
@@ -142,34 +119,33 @@ keys = (
         'hail_request',
         'dim',
         'extended_data'
-        )
-X10_Command_Codes = Lookup(zip(keys,xrange(0,15)))
+        ),xrange(0,15)))
 
 X10_Types = Lookup({
                     'unit_code': 0x0, 
                     'command_code': 0x80
                     })
 
-keys = ( 'm',
-         'e',
-         'c',
-         'k',
-         'o',
-         'g',
-         'a',
-         'i',
-         'n',
-         'f',
-         'd',
-         'l',
-         'p',
-         'h',
-         'n',
-         'j' )
+X10_House_Codes = Lookup(zip((
+                            'm',
+                            'e',
+                            'c',
+                            'k',
+                            'o',
+                            'g',
+                            'a',
+                            'i',
+                            'n',
+                            'f',
+                            'd',
+                            'l',
+                            'p',
+                            'h',
+                            'n',
+                            'j' ),xrange(0x0, 0xF)))
 
-X10_House_Codes = Lookup(zip(keys,xrange(0x0, 0xF)))
         
-keys = (
+X10_Unit_Codes = Lookup(zip((
         '13',
         '5',
         '3',
@@ -186,62 +162,9 @@ keys = (
         '8',
         '2',
         '10'
-        )
-X10_Unit_Codes = Lookup(zip(keys,xrange(0x0,0xF)))
+        ),xrange(0x0,0xF)))
 
-class Interface(threading.Thread):
-    def __init__(self, host, port):
-        threading.Thread.__init__(self)
-        
-    def _send(self,Data):
-        return None
 
-    def onReceive(self, callback):
-        self.c = callback
-        return None    
-   
-class TCP(Interface):
-    def __init__(self, host, port):
-        super(TCP, self).__init__(host,port)        
-        self.__s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print"connect"
-        self.__s.connect((host, port))
-        self.start()
-
-        
-    def send(self, dataString):
-        "Send raw HEX encoded String"
-        print "Data Sent=>" + dataString
-        data = binascii.unhexlify(dataString)
-        self.__s.send(data) 
-        return None
-    
-    def run(self):
-        self._handle_receive()
-        
-
-        
-    def _handle_receive(self):
-        while 1:
-            data = self.__s.recv(1024)
-            self.c(data)
-        self.__s.close()
-        
-class Serial(Interface):
-    def __init__(self, port, speed):
-        return None
-    pass
-    
-class USB(Interface): 
-    pass
-    def __init__(self, device):
-        return None
-
-    
-class HAProtocol(object):
-    "Base protocol interface"
-    def __init__(self, interface):
-        pass
     
 class PyInsteon(HAProtocol):
     "The Main event"
@@ -431,6 +354,7 @@ class PyInsteon(HAProtocol):
 # EXAMPLE            #
 ######################
 
+
 def x10_received(houseCode, unitCode, commandCode):
     print 'X10 Received: %s%s->%s' % (houseCode, unitCode, commandCode)
 
@@ -438,12 +362,15 @@ def insteon_received(*params):
     print 'Insteon Received:', params
     
 if __name__ == "__main__":
+    HOST='192.168.13.146'
+    PORT=9761
+
     pyI = PyInsteon(TCP(HOST, PORT))
     pyI.onReceivedX10(x10_received)
     pyI.onReceivedInsteon(insteon_received)
     pyI.getVersion()
     pyI.sendX10('m', '2', 'on')
-    pyI.sendX10('m', '1', 'on')
-    pyI.sendX10('m', '1', 'off')
+#    pyI.sendX10('m', '1', 'on')
+#    pyI.sendX10('m', '1', 'off')
     select.select([],[],[])
     
