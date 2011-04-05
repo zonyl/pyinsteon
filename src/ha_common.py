@@ -55,6 +55,8 @@ class Lookup(dict):
 class Interface(threading.Thread):
     def __init__(self, host, port):
         threading.Thread.__init__(self)
+        self.host = host
+        self.port = port
         
     def _send(self,Data):
         return None
@@ -67,7 +69,7 @@ class TCP(Interface):
     def __init__(self, host, port):
         super(TCP, self).__init__(host,port)        
         self.__s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        print"connect"
+        print"connect %s:%s" % (host, port)
         self.__s.connect((host, port))
         self.start()
 
@@ -91,9 +93,32 @@ class TCP(Interface):
         self.__s.close()
         
 class UDP(Interface):
-    def __init__(self, host, port):
-        super(TCP, self).__init__(host,port)   
-        
+    def __init__(self, fromHost, fromPort, toHost, toPort):
+        super(UDP, self).__init__(fromHost,fromPort)   
+        self.__ssend = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.__ssend.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST,1)
+#        self.__srecv = socket(socket.AF_INET, socket.SOCK_DGRAM)
+#        self.__srecv.bind((fromHost,fromPort))
+        self.__ssend.bind((fromHost,fromPort))
+        self.__fromHost = fromHost
+        self.__fromPort = fromPort
+        self.__toHost = toHost
+        self.__toPort = toPort
+        self.start()
+
+    def send(self, dataString):
+        self.__ssend.sendto(dataString,(self.__toHost,self.__toPort))
+        return None
+
+    def _handle_receive(self):
+        while 1:
+#            data = self.__srecv.recv(2048)
+            data = self.__ssend.recv(2048)
+            self.c(data)         
+
+    def run(self):
+        self._handle_receive()
+
 class Serial(Interface):
     def __init__(self, port, speed):
         return None

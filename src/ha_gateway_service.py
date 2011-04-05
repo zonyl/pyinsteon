@@ -35,12 +35,14 @@ from pyinsteon import PyInsteon,Insteon_Commmand_Codes
 from pyxpl import PyxPL
  
 if __name__ == '__main__':
+    print "Start"
     def insteon_received(*params):
         command = params[1]
 
         xpl.send('lighting.basic',"command='%s'" % (command))
     
     def xpl_received(*params):    
+        print "Here"
         toAddress = '12.34.56'
         fromAddress = '78.9A.BC'
         group = False
@@ -57,12 +59,11 @@ if __name__ == '__main__':
         insteon.sendInsteon(toAddress, fromAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data)
 
     #Lets get this party started
-    insteon = PyInsteon(TCP('192.168.13.146',9671))
+    insteon = PyInsteon(TCP('192.168.13.146',9761))
     insteon.onReceivedInsteon(insteon_received)
-
-    xpl = PyxPL(UDP('localhost',9763))
+    xpl = PyxPL(UDP('0.0.0.0',9763,'255.255.255.255',3865))
     xpl.onReceive(xpl_received)
     
     #sit and spin, let the magic happen
-    select([],[],[])
+    select.select([],[],[])
     

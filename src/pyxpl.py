@@ -36,8 +36,24 @@ class PyxPL(HAProtocol):
         super(PyxPL,self).__init__(interface)
         self.__i = interface
         self.onReceive(self._handle_receive)
+        self.sendHeartBeat()
         
-    def send(self,schema,data):
+        
+    def sendHeartBeat(self):
+        data = "xpl-stat\n"
+        data+= "{\n"
+        data+= "nhop=1\n"
+        data+= "source=zonyl-2412.gateway1\n"
+        data+= "target=*\n"
+        data+= "}\n"
+        data+= "hbeat.app\n"
+        data+= "{\n"
+        data+= "interval=5\n"
+        data+= "nport=%s\n" % (self.__i.port) 
+        data+= "}\n"
+        self.send(data)
+        
+    def send(self,data):
         self.__i.send(data)
         pass
     

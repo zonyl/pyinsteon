@@ -51,7 +51,7 @@ import select
 import time
 import binascii
 import threading
-from hacommon import HAProtocol, TCP, Lookup
+from ha_common import HAProtocol, TCP, Lookup
 
 
 #PLM Serial Commands
@@ -364,7 +364,7 @@ def insteon_received(*params):
 if __name__ == "__main__":
     HOST='192.168.13.146'
     PORT=9761
-
+    print 'shouldnt be here'
     pyI = PyInsteon(TCP(HOST, PORT))
     pyI.onReceivedX10(x10_received)
     pyI.onReceivedInsteon(insteon_received)
