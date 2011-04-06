@@ -57,6 +57,7 @@ class Interface(threading.Thread):
         threading.Thread.__init__(self)
         self.host = host
         self.port = port
+        self.c = None
         
     def _send(self,Data):
         return None
@@ -114,7 +115,9 @@ class UDP(Interface):
         while 1:
 #            data = self.__srecv.recv(2048)
             data = self.__ssend.recv(2048)
-            self.c(data)         
+            print "received stuff", data
+            if self.c != None:
+                self.c(data)         
 
     def run(self):
         self._handle_receive()

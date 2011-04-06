@@ -42,21 +42,22 @@ if __name__ == '__main__':
         xpl.send('lighting.basic',"command='%s'" % (command))
     
     def xpl_received(*params):    
-        print "Here"
-        toAddress = '12.34.56'
-        fromAddress = '78.9A.BC'
-        group = False
-        messageDirect= True
-        messageBroadcast = False
-        messageGroup = False
+        print "Here", params
+        fromAddress = '16.f9.ff'
+#        toAddress = '16.f9.ff' #Nothing when a group command is sent
+        toAddress = None
+        group = 1
+        messageDirect= False
+        messageBroadcast = True
+        messageGroup = True
         messageAcknowledge = False
         extended = False
-        hopsLeft = 3
+        hopsLeft = 2
         hopsMax = 3
         command1 = Insteon_Commmand_Codes['on']
         command2 = 0
         data = None
-        insteon.sendInsteon(toAddress, fromAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data)
+        insteon.sendInsteon(fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data)
 
     #Lets get this party started
     insteon = PyInsteon(TCP('192.168.13.146',9761))

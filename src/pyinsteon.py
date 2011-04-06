@@ -90,7 +90,8 @@ PLM_Commands = Lookup(zip(
                         'rf_sleep',
                         'plm_get_config'
                         ),xrange(0x250, 0x273)))
-#pprint.pprint(commands)
+#pprint.pprint(PLM_commands)
+PLM_Commands['unknown']=0x219 #odd little undocumented command
 
 Insteon_Commmand_Codes = Lookup({
                                  'on':0x11,
@@ -224,7 +225,7 @@ class PyInsteon(HAProtocol):
         if extended:
             userData =      dataHex[22:36]
         
-        #print "Insteon=>From=>%s To=>%s Group=> %s MessageD=>%s MB=>%s MG=>%s MA=>%s Extended=>%s HopsLeft=>%s HopsMax=>%s Command1=>%s Command2=>%s UD=>%s" % \
+        print "Insteon=>From=>%s To=>%s Group=> %s MessageD=>%s MB=>%s MG=>%s MA=>%s Extended=>%s HopsLeft=>%s HopsMax=>%s Command1=>%s Command2=>%s UD=>%s" % \
             (fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, userData)
         if self.__callback_insteon != None:
             self.__callback_insteon(fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, userData)
@@ -278,8 +279,11 @@ class PyInsteon(HAProtocol):
             dataString  = "%04x" % PLM_Commands['insteon_send']
         else:
             dataString = "%04x" % PLM_Commands['insteon_ext_send']
-        dataString += fromAddress[0:2] + fromAddress[3:5] + fromAddress[6:7]
-        dataString += toAddress[0:2] + toAddress[3:5] + toAddress[6:7]
+        dataString += fromAddress[0:2] + fromAddress[3:5] + fromAddress[6:8]
+        if messageGroup:
+            dataString += "0000" + "%02x" % group
+        else:
+            dataString += toAddress[0:2] + toAddress[3:5] + toAddress[6:8]
         if messageAcknowledge:
             messageType=messageType | 0b00100000
         if messageGroup:
@@ -293,14 +297,11 @@ class PyInsteon(HAProtocol):
             messageType=messageType | 0b00010000
         messageType = messageType | (hopsLeft  << 2)
         messageType = messageType | hopsMax
-        dataString += binascii.hexlify(messageType)
-        dataString += command1
-        dataString += command2
+        dataString += "%02x" % messageType
+        dataString += "%02x" % command1
+        dataString += "%02x" % command2
         if extended:
             dataString += data
-
-        #crc goes here?
-
         print "InsteonSend=>%s" % (dataString)
         self._send(dataString)
         
