@@ -33,18 +33,19 @@ import select
 from ha_common import TCP,UDP
 from pyinsteon import PyInsteon,Insteon_Commmand_Codes
 from pyxpl import PyxPL
- 
+import time
+
 if __name__ == '__main__':
     print "Start"
     def insteon_received(*params):
         command = params[1]
 
-        xpl.send('lighting.basic',"command='%s'" % (command))
+        #xpl.send('lighting.basic',"command='%s'" % (command))
     
     def xpl_received(*params):    
         print "Here", params
-        fromAddress = '16.f9.ff'
-#        toAddress = '16.f9.ff' #Nothing when a group command is sent
+        fromAddress = '16.f9.ec'
+#        toAddress = '16.f9.ff' #Nothing when a broadcast command is sent
         toAddress = None
         group = 1
         messageDirect= False
@@ -52,12 +53,28 @@ if __name__ == '__main__':
         messageGroup = True
         messageAcknowledge = False
         extended = False
-        hopsLeft = 2
+        hopsLeft = 3
         hopsMax = 3
         command1 = Insteon_Commmand_Codes['on']
         command2 = 0
         data = None
         insteon.sendInsteon(fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data)
+        time.sleep(2)
+        fromAddress = '16.f9.ec'
+        toAddress = '19.05.7b'
+        group = 1
+        messageDirect= False
+        messageBroadcast = False
+        messageGroup = True
+        messageAcknowledge = False
+        extended = False
+        hopsLeft = 3
+        hopsMax = 3
+        command1 = Insteon_Commmand_Codes['on']
+        command2 = 0xaa
+        data = None
+        insteon.sendInsteon(fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data)
+
 
     #Lets get this party started
     insteon = PyInsteon(TCP('192.168.13.146',9761))

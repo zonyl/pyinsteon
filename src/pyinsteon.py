@@ -280,7 +280,7 @@ class PyInsteon(HAProtocol):
         else:
             dataString = "%04x" % PLM_Commands['insteon_ext_send']
         dataString += fromAddress[0:2] + fromAddress[3:5] + fromAddress[6:8]
-        if messageGroup:
+        if messageBroadcast:
             dataString += "0000" + "%02x" % group
         else:
             dataString += toAddress[0:2] + toAddress[3:5] + toAddress[6:8]
