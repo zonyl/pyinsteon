@@ -9,6 +9,7 @@ Description:
 
 Author(s): 
          Jason Sharpee <jason@sharpee.com>  http://www.sharpee.com
+        Pyjamasam <>
 
 License:
     This free software is licensed under the terms of the GNU public license, Version 1     
@@ -29,8 +30,10 @@ Created on Apr 3, 2011
 '''
 
 import threading
+import traceback
 import socket
 import binascii
+import serial
 
 class Lookup(dict):
     """
@@ -52,7 +55,17 @@ class Lookup(dict):
         """find the value given a key"""
         return self[key]
     
-class Interface(threading.Thread):
+class Interface(object):
+    def __init__(self):
+        super(Interface,self).__init__()
+
+    def read(self,bufferSize):
+        raise NotImplemented
+
+    def write(self,data):
+        raise NotImplemented
+    
+class Interface_old(threading.Thread):
     def __init__(self, host, port):
         threading.Thread.__init__(self)
         self.host = host
@@ -65,10 +78,35 @@ class Interface(threading.Thread):
     def onReceive(self, callback):
         self.c = callback
         return None    
-   
+
 class TCP(Interface):
     def __init__(self, host, port):
-        super(TCP, self).__init__(host,port)        
+        super(TCP, self).__init__()        
+        self.__s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        print"connect %s:%s" % (host, port)
+        self.__s.connect((host, port))
+        
+    def write(self,data):
+        "Send raw binary"
+        self.__s.send(data) 
+        return None
+
+    def read(self,bufferSize):
+        "Read raw data"
+        data = ''
+        try:
+            data = self.__s.recv(bufferSize,socket.MSG_DONTWAIT)
+        except socket.error, ex:
+            pass
+        except Exception, ex:
+            print "Exception:", type(ex) 
+            pass
+#            print traceback.format_exc()
+        return data
+        
+class TCP_old(Interface):
+    def __init__(self, host, port):
+        super(TCP_old, self).__init__()        
         self.__s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         print"connect %s:%s" % (host, port)
         self.__s.connect((host, port))
@@ -93,7 +131,7 @@ class TCP(Interface):
             self.c(data)
         self.__s.close()
         
-class UDP(Interface):
+class UDP(Interface_old):
     def __init__(self, fromHost, fromPort, toHost, toPort):
         super(UDP, self).__init__(fromHost,fromPort)   
         self.__ssend = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -123,17 +161,86 @@ class UDP(Interface):
         self._handle_receive()
 
 class Serial(Interface):
-    def __init__(self, port, speed):
-        return None
-    pass
+    def __init__(self, serialDevicePath, serialSpeed = 19200, serialTimeout = 0.1):
+        super(Serial,self).__init__()
+        print "Using %s for PLM communication" % serialDevicePath
+ #       self.__serialDevice = serial.Serial(serialDevicePath, 19200, timeout = 0.1) 
+        self.__serialDevice = serial.Serial(serialDevicePath, serialSpeed, timeout = serialTimeout) 
     
+    def read(self, bufferSize):
+        return self.__serialDevice.read(bufferSize)
+    
+    def write(self, bytesToSend):
+        self.__serialDevice.write(bytesToSend)
+
 class USB(Interface): 
     pass
     def __init__(self, device):
         return None
 
     
-class HAProtocol(object):
+class HAProtocol(threading.Thread):
     "Base protocol interface"
     def __init__(self, interface):
-        pass
+        super(HAProtocol,self).__init__()
+    
+    def onReceive(self, callback):
+        raise NotImplemented
+    def turnOn(self, deviceId):
+        raise NotImplemented
+    def turnOff(self, deviceId):
+        raise NotImplemented
+        
+import time
+import re
+
+## {{{ http://code.activestate.com/recipes/142812/ (r1)
+FILTER=''.join([(len(repr(chr(x)))==3) and chr(x) or '.' for x in range(256)])
+
+def hex_dump(src, length=8):
+    N=0; result=''
+    while src:
+        s,src = src[:length],src[length:]
+        hexa = ' '.join(["%02X"%ord(x) for x in s])
+        s = s.translate(FILTER)
+        result += "%04X   %-*s   %s\n" % (N, length*3, hexa, s)
+        N+=length
+    return result
+
+## end of http://code.activestate.com/recipes/142812/ }}}
+
+def interruptibleSleep(sleepTime, interuptEvent):
+    sleepInterval = 0.05
+    
+    #adjust for the time it takes to do our instructions and such
+    totalSleepTime = sleepTime - 0.04
+    
+    while interuptEvent.isSet() == False and totalSleepTime > 0:
+        time.sleep(sleepInterval)
+        totalSleepTime = totalSleepTime - sleepInterval
+        
+        
+def sort_nicely( l ): 
+    """ Sort the given list in the way that humans expect. 
+    """ 
+    convert = lambda text: int(text) if text.isdigit() else text 
+    alphanum_key = lambda key: [ convert(c) for c in re.split('([0-9]+)', key) ] 
+    l.sort( key=alphanum_key )
+
+    return l
+    
+def convertStringFrequencyToSeconds(textFrequency):
+    frequencyNumberPart = int(textFrequency[:-1])
+    frequencyStringPart = textFrequency[-1:].lower()
+    
+    if (frequencyStringPart == "w"):
+        frequencyNumberPart *= 604800
+    elif (frequencyStringPart == "d"):
+        frequencyNumberPart *= 86400
+    elif (frequencyStringPart == "h"):
+        frequencyNumberPart *= 3600                        
+    elif (frequencyStringPart == "m"):
+        frequencyNumberPart *= 60
+        
+    return frequencyNumberPart
+        

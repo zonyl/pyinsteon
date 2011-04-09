@@ -30,8 +30,8 @@ Created on Apr 3, 2011
 @author: jason
 '''
 import select
-from ha_common import TCP,UDP
-from pyinsteon import PyInsteon,Insteon_Commmand_Codes
+from ha_common import TCP,UDP,Serial
+from pyinsteon import PyInsteon
 from pyxpl import PyxPL
 import time
 
@@ -55,15 +55,19 @@ if __name__ == '__main__':
         extended = False
         hopsLeft = 3
         hopsMax = 3
-        command1 = Insteon_Commmand_Codes['on']
+#        command1 = Insteon_Commmand_Codes['on']
         command2 = 0xff
         data = None
-        insteon.sendInsteon(toAddress,messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data)
- 
+#        insteon.sendInsteon(toAddress,messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data)
+        insteon.turnOn(toAddress, 2)
+        insteon.turnOff(toAddress, 2)
 
     #Lets get this party started
-    insteon = PyInsteon(TCP('192.168.13.146',9761))
-    insteon.onReceivedInsteon(insteon_received)
+#    insteon = PyInsteon(TCP('192.168.13.146',9761))
+    insteon = PyInsteon(Serial('/dev/ttyMI0'))
+    insteon.start()
+    # Need to get a callback implemented
+    #    insteon.onReceivedInsteon(insteon_received)
     xpl = PyxPL(UDP('0.0.0.0',9763,'255.255.255.255',3865))
     xpl.onReceive(xpl_received)
     
