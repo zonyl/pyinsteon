@@ -33,19 +33,19 @@ Example: (see bottom of file)
     def insteon_received(*params):
         print 'Insteon REceived:', params
 
-    pyI = PyInsteon(TCP('192.168.0.1', 9671))
+    pyI = PyInsteon(TCP('192.168.0.1', 9671)) #2412N
     -- or --
-    pyI = PyInsteon(Serial('/dev/ttyUSB0'))
+    pyI = PyInsteon(Serial('/dev/ttyUSB0')) #2412S
 #    pyI.onReceived(insteon_received)
 #    pyI.onReceivedX10(x10_received)
     pyI.start()
     
-    pyI.turnOn('ff.dd.ee')
-
+    pyI.turnOn('ff.dd.ee') #insteon
+    pyI.turnOn('m1') # Speaks X10 to
     select.select([],[],[])   
 
 Notes:
-    - Supports both 2412N, 2414S right now
+    - Supports both 2412N and 2412S right now
     - 
     - Todo: Read Style Guide @: http://www.python.org/dev/peps/pep-0008/
 
@@ -169,6 +169,42 @@ class PyInsteon(ha_common.HAProtocol):
                                     },                                   
                                 }
         
+        self.__x10HouseCodes = ha_common.Lookup(zip((
+                            'm',
+                            'e',
+                            'c',
+                            'k',
+                            'o',
+                            'g',
+                            'a',
+                            'i',
+                            'n',
+                            'f',
+                            'd',
+                            'l',
+                            'p',
+                            'h',
+                            'n',
+                            'j' ),xrange(0x0, 0xF)))
+        
+        self.__x10UnitCodes = ha_common.Lookup(zip((
+                             '13',
+                             '5',
+                             '3',
+                             '11',
+                             '15',
+                             '7',
+                             '1',
+                             '9',
+                             '14',
+                             '6',
+                             '4',
+                             '12',
+                             '16',
+                             '8',
+                             '2',
+                             '10'
+                             ),xrange(0x0,0xF)))
         
         self._allLinkDatabase = dict()
         
@@ -328,9 +364,21 @@ class PyInsteon(ha_common.HAProtocol):
     def __sendStandardP2PInsteonCommand(self, destinationDevice, commandId1, commandId2):                
         return self.__sendModemCommand('62', _stringIdToByteIds(destinationDevice) + _buildFlags() + binascii.unhexlify(commandId1) + binascii.unhexlify(commandId2), extraCommandDetails = { 'destinationDevice': destinationDevice, 'commandId1': 'SD' + commandId1, 'commandId2': commandId2})
 
-    def __sendStandardX10Command(self,deviceId,commandId1, commandId2):
-        # X10 sends 1 complete command in two messages
-        return self.__sendModemCommand('63', commandId1, commandId2)
+    def __getX10UnitCommand(self,deviceId):
+        "Send just an X10 unit code message"
+        deviceId = deviceId.lower()
+        return "%02x00" % ((self.__x10HouseCodes[deviceId[0:1]] << 4) | self.__x10UnitCodes[deviceId[1:2]])
+
+    def __getX10CommandCommand(self,deviceId,commandCode):
+        "Send just an X10 command code message"
+        deviceId = deviceId.lower()
+        return "%02x80" % ((self.__x10HouseCodes[deviceId[0:1]] << 4) | int(commandCode,16))
+    
+    def __sendStandardP2PX10Command(self,deviceId,commandId1, commandId2 = None):
+        # X10 sends 1 complete message in two commands
+        self.__sendModemCommand('63', binascii.unhexlify(self.__getX10UnitCommand(deviceId)))
+        
+        return self.__sendModemCommand('63', binascii.unhexlify(self.__getX10CommandCommand(deviceId, commandId1)))
             
     def __waitForCommandToFinish(self, commandExecutionDetails, timeout = None):
                 
@@ -626,11 +674,17 @@ class PyInsteon(ha_common.HAProtocol):
         return self.__waitForCommandToFinish(commandExecutionDetails, timeout = timeout)        
                     
     def turnOn(self, deviceId, timeout = None):        
-        commandExecutionDetails = self.__sendStandardP2PInsteonCommand(deviceId, '11', 'ff')                        
+        if len(deviceId) != 2: #insteon device address
+            commandExecutionDetails = self.__sendStandardP2PInsteonCommand(deviceId, '11', 'ff')                        
+        else: #X10 device address
+            commandExecutionDetails = self.__sendStandardP2PX10Command(deviceId,'02')
         return self.__waitForCommandToFinish(commandExecutionDetails, timeout = timeout)            
 
     def turnOff(self, deviceId, timeout = None):
-        commandExecutionDetails = self.__sendStandardP2PInsteonCommand(deviceId, '13', '00')                        
+        if len(deviceId) != 2: #insteon device address
+            commandExecutionDetails = self.__sendStandardP2PInsteonCommand(deviceId, '13', '00')
+        else: #X10 device address
+            commandExecutionDetails = self.__sendStandardP2PX10Command(deviceId,'03')
         return self.__waitForCommandToFinish(commandExecutionDetails, timeout = timeout)
     
     def turnOnFast(self, deviceId, timeout = None):        
@@ -655,17 +709,7 @@ class PyInsteon(ha_common.HAProtocol):
     
     def dimOneStep(self, deviceId, timeout = None):
         commandExecutionDetails = self.__sendStandardP2PInsteonCommand(deviceId, '16', '00')                        
-        return self.__waitForCommandToFinish(commandExecutionDetails, timeout = timeout)            
-            
-    def turnOnX10(self, deviceId, timeout = None):
-        commandExecutionDetails = self.__sendStandardP2PX10Command(deviceId,'2','')
         return self.__waitForCommandToFinish(commandExecutionDetails, timeout = timeout)
-        pass
-
-    def turnOffX10(self, deviceId, timeout = None):
-        commandExecutionDetails = self.__sendStandardP2PX10Command(deviceId,'3','')
-        return self.__waitForCommandToFinish(commandExecutionDetails, timeout = timeout)
-        pass
 
 '''
 

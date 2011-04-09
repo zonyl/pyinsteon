@@ -69,8 +69,11 @@ if __name__ == '__main__':
     # Need to get a callback implemented
     #    insteon.onReceivedInsteon(insteon_received)
     xpl = PyxPL(UDP('0.0.0.0',9763,'255.255.255.255',3865))
-    xpl.onReceive(xpl_received)
-    
+    #xpl.onReceive(xpl_received)
+    insteon.turnOn('19.05.7b')
+    insteon.turnOff('19.05.7b')
+    insteon.turnOn('m1')
+    insteon.turnOff('m1')
     #sit and spin, let the magic happen
     select.select([],[],[])
     
