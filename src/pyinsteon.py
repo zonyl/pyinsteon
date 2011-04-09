@@ -92,6 +92,7 @@ PLM_Commands = Lookup(zip(
                         ),xrange(0x250, 0x273)))
 #pprint.pprint(PLM_commands)
 PLM_Commands['unknown']=0x219 #odd little undocumented command
+PLM_Commands['unknown1']=0x2b2 # ?
 
 Insteon_Commmand_Codes = Lookup({
                                  'on':0x11,
@@ -272,27 +273,24 @@ class PyInsteon(HAProtocol):
         # Of interest is that the controller will return an Ack before it is finished sending, so overrun wont be seen until next send
         time.sleep(.5)
 
-    def sendInsteon(self, fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data):
+    def sendInsteon(self, toAddress, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data):
         "Send raw Insteon message"
         messageType=0
         if extended==False:
             dataString  = "%04x" % PLM_Commands['insteon_send']
         else:
             dataString = "%04x" % PLM_Commands['insteon_ext_send']
-        dataString += fromAddress[0:2] + fromAddress[3:5] + fromAddress[6:8]
-        if messageBroadcast:
-            dataString += "0000" + "%02x" % group
-        else:
-            dataString += toAddress[0:2] + toAddress[3:5] + toAddress[6:8]
+        #better comprehension here?
+        high, mid, low = toAddress.split('.')
+        dataString += high
+        dataString += mid
+        dataString += low
         if messageAcknowledge:
             messageType=messageType | 0b00100000
         if messageGroup:
             messageType=messageType | 0b01000000
         if messageBroadcast:
             messageType=messageType | 0b10000000
-        #Message Direct clears all other bits.. sorry thats the way it works
-        if messageDirect:
-            messageType=0
         if extended:
             messageType=messageType | 0b00010000
         messageType = messageType | (hopsLeft  << 2)
@@ -304,6 +302,8 @@ class PyInsteon(HAProtocol):
             dataString += data
         print "InsteonSend=>%s" % (dataString)
         self._send(dataString)
+        print dataString
+            
         
     def sendX10(self, houseCode, unitCode, commandCode):
         "Send Fully formed X10 Unit / Command"

@@ -44,37 +44,22 @@ if __name__ == '__main__':
     
     def xpl_received(*params):    
         print "Here", params
-        fromAddress = '16.f9.ec'
-#        toAddress = '16.f9.ff' #Nothing when a broadcast command is sent
-        toAddress = None
-        group = 1
-        messageDirect= False
-        messageBroadcast = True
-        messageGroup = True
-        messageAcknowledge = False
-        extended = False
-        hopsLeft = 3
-        hopsMax = 3
-        command1 = Insteon_Commmand_Codes['on']
-        command2 = 0
-        data = None
-        insteon.sendInsteon(fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data)
-        time.sleep(2)
-        fromAddress = '16.f9.ec'
+#        fromAddress = '16.f9.ec'
         toAddress = '19.05.7b'
+#        toAddress = '16.f9.ff' #Nothing when a broadcast command is sent
         group = 1
         messageDirect= False
         messageBroadcast = False
-        messageGroup = True
+        messageGroup = False
         messageAcknowledge = False
         extended = False
         hopsLeft = 3
         hopsMax = 3
         command1 = Insteon_Commmand_Codes['on']
-        command2 = 0xaa
+        command2 = 0xff
         data = None
-        insteon.sendInsteon(fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data)
-
+        insteon.sendInsteon(toAddress,messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data)
+ 
 
     #Lets get this party started
     insteon = PyInsteon(TCP('192.168.13.146',9761))
