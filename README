@@ -10,6 +10,7 @@ Description:
 
 Author(s): 
          Jason Sharpee <jason@sharpee.com>  http://www.sharpee.com
+	 Pyjamasam@GitHub <>
          mahmul @ #python
          Ene Uran 01/19/2008    http://www.daniweb.com/software-development/python/code/217019
 
@@ -34,15 +35,9 @@ Example: (see bottom of file)
         print 'Insteon REceived:', params
 
     pyI = PyInsteon(TCP('192.168.0.1', 9671))
-    pyI.getVersion()
-    pyI.sendX10('m', '2', 'on')
-    pyI.onReceivedX10(x10_received)
-    pyI.onReceivedInsteon(insteon_received)
     select.select([],[],[])   
 
 Notes:
-    - Only support 2412N right now
-    - Insteon is not quite finished / untested
-    - Read Style Guide @: http://www.python.org/dev/peps/pep-0008/
+    - Todo: Read Style Guide @: http://www.python.org/dev/peps/pep-0008/
 
 Created on Mar 26, 2011
