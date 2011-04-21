@@ -3,7 +3,7 @@ File:
         pyinsteon.py
 
 Description:
-        Insteon Home Automation Protocol library for Python (Smarthome 2412N, 2412S, 2412U)
+        InsteonPLM Home Automation Protocol library for Python (Smarthome 2412N, 2412S, 2412U)
         
         For more information regarding the technical details of the PLM:
                 http://www.smarthome.com/manuals/2412sdevguide.pdf
@@ -20,29 +20,12 @@ License:
     This free software is licensed under the terms of the GNU public license, Version 1     
 
 Usage:
-    - Instantiate PyInsteon by passing in an interface
+    - Instantiate InsteonPLM by passing in an interface
     - Call its methods
     - ?
     - Profit
 
-Example: (see bottom of file) 
-
-    def x10_received(houseCode, unitCode, commandCode):
-        print 'X10 Received: %s%s->%s' % (houseCode, unitCode, commandCode)
-
-    def insteon_received(*params):
-        print 'Insteon REceived:', params
-
-    pyI = PyInsteon(TCP('192.168.0.1', 9671)) #2412N
-    -- or --
-    pyI = PyInsteon(Serial('/dev/ttyUSB0')) #2412S
-#    pyI.onReceived(insteon_received)
-#    pyI.onReceivedX10(x10_received)
-    pyI.start()
-    
-    pyI.turnOn('ff.dd.ee') #insteon
-    pyI.turnOn('m1') # Speaks X10 to
-    select.select([],[],[])   
+Example: (see bottom of PyInsteon.py file) 
 
 Notes:
     - Supports both 2412N and 2412S right now
@@ -61,7 +44,7 @@ import sys
 import string
 import hashlib
 from collections import deque
-import ha_common
+from ha_common import *
 import serial
 
 def _byteIdToStringId(idHigh, idMid, idLow):
@@ -84,10 +67,12 @@ def simpleMap(value, in_min, in_max, out_min, out_max):
     #stolen from the arduino implimentation.  I am sure there is a nice python way to do it, but I have yet to stublem across it                
     return (float(value) - float(in_min)) * (float(out_max) - float(out_min)) / (float(in_max) - float(in_min)) + float(out_min);
 
-class PyInsteon(ha_common.HAProtocol):
+
+
+class InsteonPLM(HAInterface):
     
     def __init__(self, interface):
-        super(PyInsteon, self).__init__(interface)
+        super(InsteonPLM, self).__init__(interface)
         
         self.__modemCommands = {'60': {
                                     'responseSize':7,
@@ -108,7 +93,7 @@ class PyInsteon(ha_common.HAProtocol):
                                   },                                
                                 '63': {
                                     'responseSize':4,
-                                    'callBack':self.__process_InboundX10Message
+                                    'callBack':self.__process_StandardX10MessagePLMEcho
                                   },
                                 '52': {
                                     'responseSize':4,
@@ -121,7 +106,7 @@ class PyInsteon(ha_common.HAProtocol):
                                     'SD03': {        #Product Data Request (generally an Ack)                            
                                         'callBack' : self.__handle_StandardDirect_IgnoreAck
                                     },
-                                    'SD0D': {        #Get Insteon Engine                            
+                                    'SD0D': {        #Get InsteonPLM Engine                            
                                         'callBack' : self.__handle_StandardDirect_EngineResponse,
                                         'validResponseCommands' : ['SD0D']
                                     },
@@ -161,7 +146,6 @@ class PyInsteon(ha_common.HAProtocol):
                                         'callBack' : self.__handle_StandardDirect_LightStatusResponse,
                                         'validResponseCommands' : ['SD19']
                                     },    
-                                    
                                     #Broadcast Messages/Responses                                
                                     'SB01': {    
                                                     #Set button pushed                                
@@ -169,7 +153,7 @@ class PyInsteon(ha_common.HAProtocol):
                                     },                                   
                                 }
         
-        self.__x10HouseCodes = ha_common.Lookup(zip((
+        self.__x10HouseCodes = Lookup(zip((
                             'm',
                             'e',
                             'c',
@@ -187,7 +171,7 @@ class PyInsteon(ha_common.HAProtocol):
                             'n',
                             'j' ),xrange(0x0, 0xF)))
         
-        self.__x10UnitCodes = ha_common.Lookup(zip((
+        self.__x10UnitCodes = Lookup(zip((
                              '13',
                              '5',
                              '3',
@@ -250,7 +234,7 @@ class PyInsteon(ha_common.HAProtocol):
                 commandExecutionDetails = self.__outboundCommandDetails[commandHash]
                 
                 bytesToSend = commandExecutionDetails['bytesToSend']
-                print "> ", ha_common.hex_dump(bytesToSend, len(bytesToSend)),
+                print "> ", hex_dump(bytesToSend, len(bytesToSend)),
 
                 self.__interface.write(bytesToSend)                    
                 
@@ -285,7 +269,7 @@ class PyInsteon(ha_common.HAProtocol):
                         remainingBytes = self.__interface.read(responseSize)
                         
                         print "< ",
-                        print ha_common.hex_dump(firstByte + secondByte + remainingBytes, len(firstByte + secondByte + remainingBytes)),
+                        print hex_dump(firstByte + secondByte + remainingBytes, len(firstByte + secondByte + remainingBytes)),
                         
                         currentPacketHash = hashPacket(firstByte + secondByte + remainingBytes)
                         if lastPacketHash and lastPacketHash == currentPacketHash:
@@ -307,8 +291,9 @@ class PyInsteon(ha_common.HAProtocol):
                     print "Unknown first byte %s" % binascii.hexlify(firstByte[0])
             else:
                 #print "Sleeping"
-                time.sleep(0.1)
-            
+                #X10 is slow.  Need to adjust based on protocol sent.  Or pay attention to NAK and auto adjust
+                #time.sleep(0.1)
+                time.sleep(0.5)
 
             
         self.__interfaceRunningEvent.clear()
@@ -362,6 +347,7 @@ class PyInsteon(ha_common.HAProtocol):
         
         
     def __sendStandardP2PInsteonCommand(self, destinationDevice, commandId1, commandId2):                
+        print "Command: %s %s %s" % (destinationDevice, commandId1, commandId2)
         return self.__sendModemCommand('62', _stringIdToByteIds(destinationDevice) + _buildFlags() + binascii.unhexlify(commandId1) + binascii.unhexlify(commandId2), extraCommandDetails = { 'destinationDevice': destinationDevice, 'commandId1': 'SD' + commandId1, 'commandId2': commandId2})
 
     def __getX10UnitCommand(self,deviceId):
@@ -374,11 +360,14 @@ class PyInsteon(ha_common.HAProtocol):
         deviceId = deviceId.lower()
         return "%02x80" % ((self.__x10HouseCodes[deviceId[0:1]] << 4) | int(commandCode,16))
     
-    def __sendStandardP2PX10Command(self,deviceId,commandId1, commandId2 = None):
+    def __sendStandardP2PX10Command(self,destinationDevice,commandId1, commandId2 = None):
         # X10 sends 1 complete message in two commands
-        self.__sendModemCommand('63', binascii.unhexlify(self.__getX10UnitCommand(deviceId)))
+        print "Command: %s %s %s" % (destinationDevice, commandId1, commandId2)
+        print "C: %s" % self.__getX10UnitCommand(destinationDevice)
+        print "c1: %s" % self.__getX10CommandCommand(destinationDevice, commandId1)
+        self.__sendModemCommand('63', binascii.unhexlify(self.__getX10UnitCommand(destinationDevice)))
         
-        return self.__sendModemCommand('63', binascii.unhexlify(self.__getX10CommandCommand(deviceId, commandId1)))
+        return self.__sendModemCommand('63', binascii.unhexlify(self.__getX10CommandCommand(destinationDevice, commandId1)))
             
     def __waitForCommandToFinish(self, commandExecutionDetails, timeout = None):
                 
@@ -469,13 +458,16 @@ class PyInsteon(ha_common.HAProtocol):
             del self.__pendingCommandDetails[foundCommandHash]
         else:
             print "Unable to find pending command details for the following packet:"
-            print ha_common.hex_dump(responseBytes, len(responseBytes))
+            print hex_dump(responseBytes, len(responseBytes))
             
     def __process_StandardInsteonMessagePLMEcho(self, responseBytes):                
         #print utilities.hex_dump(responseBytes, len(responseBytes))
         #we don't do anything here.  Just eat the echoed bytes
         pass
             
+    def __process_StandardX10MessagePLMEcho(self, responseBytes):
+        # Just ack / error echo from sending an X10 command
+        pass
         
     def __validResponseMessagesForCommandId(self, commandId):
         if self.__insteonCommands.has_key(commandId):
@@ -597,6 +589,7 @@ class PyInsteon(ha_common.HAProtocol):
         #TODO not implemented
         unitCode = None
         commandCode = None
+        print "X10> ", hex_dump(responseBytes, len(responseBytes)),
  #       (insteonCommand, fromIdHigh, fromIdMid, fromIdLow, toIdHigh, toIdMid, toIdLow, messageFlags, command1, command2) = struct.unpack('xBBBBBBBBBB', responseBytes)        
 #        houseCode =     (int(responseBytes[4:6],16) & 0b11110000) >> 4 
  #       houseCodeDec = X10_House_Codes.get_key(houseCode)
@@ -673,6 +666,21 @@ class PyInsteon(ha_common.HAProtocol):
         commandExecutionDetails = self.__sendStandardP2PInsteonCommand(deviceId, '19', '00')                        
         return self.__waitForCommandToFinish(commandExecutionDetails, timeout = timeout)        
                     
+    def command(self, device, command, timeout = None):
+        command = command.lower()
+        if isinstance(device, InsteonDevice):
+            print "InsteonA"
+            commandExecutionDetails = self.__sendStandardP2PInsteonCommand(device.deviceId, "%02x" % (HACommand()[command]['primary']['insteon']), "%02x" % (HACommand()[command]['secondary']['insteon']))
+        elif isinstance(device, X10Device):
+            print "X10A"
+            commandExecutionDetails = self.__sendStandardP2PX10Command(device.deviceId,"%02x" % (HACommand()[command]['primary']['x10']))
+        else:
+            print "stuffing"
+        return self.__waitForCommandToFinish(commandExecutionDetails, timeout = timeout)            
+        
+    def onCommand(self,callback):
+        pass
+    
     def turnOn(self, deviceId, timeout = None):        
         if len(deviceId) != 2: #insteon device address
             commandExecutionDetails = self.__sendStandardP2PInsteonCommand(deviceId, '11', 'ff')                        
@@ -711,318 +719,7 @@ class PyInsteon(ha_common.HAProtocol):
         commandExecutionDetails = self.__sendStandardP2PInsteonCommand(deviceId, '16', '00')                        
         return self.__waitForCommandToFinish(commandExecutionDetails, timeout = timeout)
 
-'''
 
-import select
-import time
-import binascii
-import threading
-
-
-
-
-
-
-#PLM Serial Commands
-PLM_Commands = Lookup(zip(
-                          ('insteon_received',
-                        'insteon_ext_received',
-                        'x10_received',
-                        'all_link_complete',
-                        'plm_button_event',
-                        'user_user_reset',
-                        'all_link_clean_failed',
-                        'all_link_record',
-                        'all_link_clean_status',
-                        '',
-                        '',
-                        '',
-                        '',
-                        '',
-                        '',
-                        '',
-                        'plm_info',
-                        'all_link_send',
-                        'insteon_send',
-                        'x10_send',
-                        'all_link_start',
-                        'all_link_cancel',
-                        'plm_reset',
-                        'all_link_first_rec',
-                        'all_link_next_rec',
-                        'plm_set_config',
-                        'plm_led_on',
-                        'plm_led_off',
-                        'all_link_manage_rec',
-                        'insteon_nak',
-                        'insteon_ack',
-                        'rf_sleep',
-                        'plm_get_config'
-                        ),xrange(0x250, 0x273)))
-#pprint.pprint(PLM_commands)
-PLM_Commands['unknown']=0x219 #odd little undocumented command
-PLM_Commands['unknown1']=0x2b2 # ?
-
-Insteon_Commmand_Codes = Lookup({
-                                 'on':0x11,
-                                 'fast_on':0x12,
-                                 'off':0x19,
-                                 'fast_off':0x20
-                                 })
-    
-### Possibly error in Insteon Documentation regarding command mapping of preset dim and off
-X10_Command_Codes = Lookup(zip((
-        'all_lights_off',
-        'status_off',
-        'on',
-#        'preset_dim',
-        'off',
-        'all_lights_on',
-        'hail_acknowledge',
-        'bright',
-        'status_on',
-        'extended_code',
-        'status_request',
-#        'off',
-        'present_dim'
-        'preset_dim2',
-        'all_units_off',
-        'hail_request',
-        'dim',
-        'extended_data'
-        ),xrange(0,15)))
-
-X10_Types = Lookup({
-                    'unit_code': 0x0, 
-                    'command_code': 0x80
-                    })
-
-X10_House_Codes = Lookup(zip((
-                            'm',
-                            'e',
-                            'c',
-                            'k',
-                            'o',
-                            'g',
-                            'a',
-                            'i',
-                            'n',
-                            'f',
-                            'd',
-                            'l',
-                            'p',
-                            'h',
-                            'n',
-                            'j' ),xrange(0x0, 0xF)))
-
-        
-X10_Unit_Codes = Lookup(zip((
-        '13',
-        '5',
-        '3',
-        '11',
-        '15',
-        '7',
-        '1',
-        '9',
-        '14',
-        '6',
-        '4',
-        '12',
-        '16',
-        '8',
-        '2',
-        '10'
-        ),xrange(0x0,0xF)))
-
-
-    
-
-
-
-class PyInsteon(HAProtocol):
-    "The Main event"
-    
-    def __init__(self, interface):
-        super(PyInsteon, self).__init__(interface)        
-        self.__i = interface
-        self.__i.onReceive(self._handle_received)
-        self.__dataReceived = threading.Event()
-        self.__dataReceived.clear()
-        self.__callback_x10 = None
-        self.__callback_insteon = None
-        self.__x10UnitCode = None
-        self.__version = None
-        return None
-
-    def _handle_received(self,data):
-        dataHex = binascii.hexlify(data)
-        print "Data Received=>" + dataHex
-        plm_command = int(dataHex[0:4],16)
-        print "Command->%d %s '%s'" % (plm_command,plm_command,PLM_Commands.get_key(plm_command))
-        callback = { 
-                        'plm_info': self._recvInfo,
-                        'insteon_received': self._recvInsteon,
-                        'insteon_ext_received': self._recvInsteon,
-                        'x10_received': self._recvX10
-                    }.get(PLM_Commands.get_key(plm_command))
-        if callback:
-            callback(dataHex)
-
-        #Let other threads know data has been received and processed
-        self.__dataReceived.set()
-
-    def _recvInfo(self,dataHex):
-        "Receive Handler for PLM Info"
-        self.__version=dataHex[14:16]
-
-    def _recvInsteon(self,dataHex):
-        "Receive Handler for Insteon Data"
-        group=None
-        userData=None
-
-        fromAddress =       dataHex[4:6] + "." + dataHex[6:8] + "." +  dataHex[8:10] 
-        toAddress =         dataHex[10:12] + "." + dataHex[12:14] + "." +  dataHex[14:16]
-        messageDirect =     ((int(dataHex[16:18],16) & 0b11100000) >> 5)==0
-        messageAcknowledge =((int(dataHex[16:18],16) & 0b00100000) >> 5)>0
-        messageGroup =      ((int(dataHex[16:18],16) & 0b01000000) >> 6)>0
-        if messageGroup:
-            group =             dataHex[14:16] # overlapped into toAddress if a group call is made
-        messageBroadcast =  ((int(dataHex[16:18],16) & 0b10000000) >> 7)>0
-        extended =          ((int(dataHex[16:18],16) & 0b00010000) >> 4)>0 #4th MSB
-        hopsLeft =          (int(dataHex[16:18],16) & 0b00001100) >> 2 #3-2nd MSB
-        hopsMax =           (int(dataHex[16:18],16) & 0b00000011)  #0-1 MSB
-        # could have also used ord(binascii.unhexlify(dataHex[16:17])) & 0b11100000
-        command1=       dataHex[18:20]
-        command2=       dataHex[20:22]
-        if extended:
-            userData =      dataHex[22:36]
-        
-        print "Insteon=>From=>%s To=>%s Group=> %s MessageD=>%s MB=>%s MG=>%s MA=>%s Extended=>%s HopsLeft=>%s HopsMax=>%s Command1=>%s Command2=>%s UD=>%s" % \
-            (fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, userData)
-        if self.__callback_insteon != None:
-            self.__callback_insteon(fromAddress, toAddress, group, messageDirect, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, userData)
-    
-    def _recvX10(self,dataHex):
-        "Receive Handler for X10 Data"
-        #X10 sends commands fully in two separate messages"
-        unitCode = None
-        commandCode = None
-        houseCode =     (int(dataHex[4:6],16) & 0b11110000) >> 4 
-        houseCodeDec = X10_House_Codes.get_key(houseCode)
-        keyCode =       (int(dataHex[4:6],16) & 0b00001111)
-        flag =          int(dataHex[6:8],16)
-#        print "X10=>House=>%s Unit=>%s Command=>%s Flag=%s" % (houseCode, unitCode, commandCode, flag)
-        if flag == X10_Types['unit_code']:
-            unitCode = keyCode
-            unitCodeDec = X10_Unit_Codes.get_key(unitCode)
-            #print "X10: Beginning transmission X10=>House=>%s Unit=>%s" % (houseCodeDec, unitCodeDec)
-            self.__x10UnitCode = unitCodeDec
-        elif flag == X10_Types['command_code']:
-            commandCode = keyCode
-            commandCodeDec = X10_Command_Codes.get_key(commandCode)
-            #print "Fully formed X10=>House=>%s Unit=>%s Command=>%s" % (houseCodeDec, self.__x10UnitCode, commandCodeDec)
-            #Only send fully formed messages
-            if self.__callback_x10 != None:
-                self.__callback_x10(houseCodeDec, self.__x10UnitCode, commandCodeDec)
-            self.__x10UnitCode = None
-            
-    def getVersion(self):
-        "Get PLM firmware version #"
-#        self.__i.send(PLM_COMMANDS.plm_info)
-        
-        self.__i.send("%04x" %PLM_Commands['plm_info'])
-        self.__dataReceived.wait(1000)
-        return self.__version
-
-    def _send(self,dataHex):
-        "Send raw data"
-        #We are starting a new transmission, clear any blocks on receive
-        self.__dataReceived.clear()
-        self.__i.send(dataHex)
-        #Slow down the interface when sending.  Takes a while and can overrun easily
-        #todo make this adaptable based on Ack / Nak rates
-        # Of interest is that the controller will return an Ack before it is finished sending, so overrun wont be seen until next send
-        time.sleep(.5)
-
-    def sendInsteon(self, toAddress, messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data):
-        "Send raw Insteon message"
-        messageType=0
-        if extended==False:
-            dataString  = "%04x" % PLM_Commands['insteon_send']
-        else:
-            dataString = "%04x" % PLM_Commands['insteon_ext_send']
-        #better comprehension here?
-        high, mid, low = toAddress.split('.')
-        dataString += high
-        dataString += mid
-        dataString += low
-        if messageAcknowledge:
-            messageType=messageType | 0b00100000
-        if messageGroup:
-            messageType=messageType | 0b01000000
-        if messageBroadcast:
-            messageType=messageType | 0b10000000
-        if extended:
-            messageType=messageType | 0b00010000
-        messageType = messageType | (hopsLeft  << 2)
-        messageType = messageType | hopsMax
-        dataString += "%02x" % messageType
-        dataString += "%02x" % command1
-        dataString += "%02x" % command2
-        if extended:
-            dataString += data
-        print "InsteonSend=>%s" % (dataString)
-        self._send(dataString)
-        print dataString
-            
-        
-    def sendX10(self, houseCode, unitCode, commandCode):
-        "Send Fully formed X10 Unit / Command"
-        self.sendX10Unit(houseCode, unitCode)
-
-        #wait for acknowledge.
-        self.__dataReceived.wait(1000)
-                
-        self.sendX10Command(houseCode, commandCode)
-
-    def sendX10Unit(self,houseCode,unitCode):
-        "Send just an X10 unit code message"
-        
-        houseCode=houseCode.lower()
-        unitCodeEnc = X10_Unit_Codes[unitCode]
-        houseCodeEnc = X10_House_Codes[houseCode]
-        dataString = "%04x" % PLM_Commands['x10_send']
-        firstByte = houseCodeEnc << 4
-        firstByte = firstByte | unitCodeEnc
-        dataString+= "%02x" % (firstByte)
-        dataString+=  "%02x" % X10_Types['unit_code']
-        self._send(dataString)
-
-    def sendX10Command(self,houseCode,commandCode):
-        "Send just an X10 command code message"
-
-        houseCode=houseCode.lower()
-        commandCode = commandCode.lower()
-        commandCodeEnc= X10_Command_Codes[commandCode]
-        houseCodeEnc = X10_House_Codes[houseCode]
-        dataString = "%04x" % PLM_Commands['x10_send']
-        firstByte = houseCodeEnc << 4
-        firstByte = firstByte | commandCodeEnc
-        dataString+= "%02x" % (firstByte)
-        dataString+= "%02x" % X10_Types['command_code']
-        self._send(dataString)
-        
-    def onReceivedX10(self, callback):
-        "Set callback for reception of an X10 message"
-        self.__callback_x10=callback
-        return
-    
-    def onReceivedInsteon(self, callback):
-        "Set callback for reception of an Insteon message"
-        self.__callback_insteon=callback
-        return
-'''
 ######################
 # EXAMPLE            #
 ######################
@@ -1032,20 +729,26 @@ def x10_received(houseCode, unitCode, commandCode):
     print 'X10 Received: %s%s->%s' % (houseCode, unitCode, commandCode)
 
 def insteon_received(*params):
-    print 'Insteon Received:', params
+    print 'InsteonPLM Received:', params
     
 if __name__ == "__main__":
-    HOST='192.168.13.146'
-    PORT=9761
-    print 'shouldnt be here'
-    pyI = PyInsteon(TCP(HOST, PORT))
-#    pyI.onReceivedX10(x10_received)
-#    pyI.onReceivedInsteon(insteon_received)
-#    pyI.getVersion()
-#    pyI.sendX10('m', '2', 'on')
-#    pyI.sendX10('m', '1', 'on')
-#    pyI.sendX10('m', '1', 'off')
-    pyI.turnOn('ff.dd.cc')
+
+   #Lets get this party started
+    insteonPLM = InsteonPLM(TCP('192.168.13.146',9761))
+#    insteonPLM = InsteonPLM(Serial('/dev/ttyMI0'))
+
+    jlight = InsteonDevice('19.05.7b',insteonPLM)
+    jRelay = X10Device('m1',insteonPLM)
+
+    insteonPLM.start()
+
+    jlight.set('faston')
+    jlight.set('fastoff')
+    jRelay.set('on')
+    jRelay.set('off')
+    
+    # Need to get a callback implemented
+    #    insteon.onReceivedInsteon(insteon_received)
+
+    #sit and spin, let the magic happen
     select.select([],[],[])
-
-

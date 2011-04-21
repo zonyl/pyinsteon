@@ -30,8 +30,8 @@ Created on Apr 3, 2011
 @author: jason
 '''
 import select
-from ha_common import TCP,UDP,Serial
-from pyinsteon import PyInsteon
+from ha_common import *
+from pyinsteon import InsteonPLM
 from pyxpl import PyxPL
 import time
 
@@ -44,36 +44,29 @@ if __name__ == '__main__':
     
     def xpl_received(*params):    
         print "Here", params
-#        fromAddress = '16.f9.ec'
-        toAddress = '19.05.7b'
-#        toAddress = '16.f9.ff' #Nothing when a broadcast command is sent
-        group = 1
-        messageDirect= False
-        messageBroadcast = False
-        messageGroup = False
-        messageAcknowledge = False
-        extended = False
-        hopsLeft = 3
-        hopsMax = 3
-#        command1 = Insteon_Commmand_Codes['on']
-        command2 = 0xff
-        data = None
-#        insteon.sendInsteon(toAddress,messageBroadcast, messageGroup, messageAcknowledge, extended, hopsLeft, hopsMax, command1, command2, data)
-        insteon.turnOn(toAddress, 2)
-        insteon.turnOff(toAddress, 2)
+ #       jlight.set('on')
+ #       jlight.set('off')
 
     #Lets get this party started
-#    insteon = PyInsteon(TCP('192.168.13.146',9761))
-    insteon = PyInsteon(Serial('/dev/ttyMI0'))
-    insteon.start()
+    insteonPLM = InsteonPLM(TCP('192.168.13.146',9761))
+#    insteonPLM = InsteonPLM(Serial('/dev/ttyMI0'))
+
+    jlight = InsteonDevice('19.05.7b',insteonPLM)
+    jRelay = X10Device('m1',insteonPLM)
+
+    insteonPLM.start()
+
+    jlight.set('on')
+    jlight.set('off')
+    jRelay.set('on')
+    jRelay.set('off')
+    
     # Need to get a callback implemented
     #    insteon.onReceivedInsteon(insteon_received)
+
     xpl = PyxPL(UDP('0.0.0.0',9763,'255.255.255.255',3865))
     #xpl.onReceive(xpl_received)
-    insteon.turnOn('19.05.7b')
-    insteon.turnOff('19.05.7b')
-    insteon.turnOn('m1')
-    insteon.turnOff('m1')
+
     #sit and spin, let the magic happen
     select.select([],[],[])
     

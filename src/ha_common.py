@@ -45,7 +45,10 @@ class Lookup(dict):
         dict.__init__(self, items)
     def get_key(self, value):
         """find the key as a list given a value"""
-        items = [item[0] for item in self.items() if item[1] == value]
+        if type(value) == type(dict()):
+            items = [item[0] for item in self.items() if item[1][value.items()[0][0]] == value.items()[0][1]]
+        else:
+            items = [item[0] for item in self.items() if item[1] == value]
         return items[0]   
      
     def get_keys(self, value):
@@ -54,7 +57,7 @@ class Lookup(dict):
     def get_value(self, key):
         """find the value given a key"""
         return self[key]
-    
+   
 class Interface(object):
     def __init__(self):
         super(Interface,self).__init__()
@@ -177,19 +180,98 @@ class USB(Interface):
     pass
     def __init__(self, device):
         return None
+    
+class HADevice(object):
 
+    def __init__(self,deviceId,interface = None):
+        super(HADevice,self).__init__()
+        self.interface = interface
+        self.deviceId = deviceId
+        
+    def set(self, command):
+        self.interface.command(self, command)
     
-class HAProtocol(threading.Thread):
+class InsteonDevice(HADevice):
+    def __init__(self, deviceId, interface = None):
+        super(InsteonDevice, self).__init__(deviceId, interface)
+
+class X10Device(HADevice):    
+    def __init__(self, deviceId, interface = None):
+        super(X10Device, self).__init__(deviceId, interface)
+
+class HACommand(Lookup):
+    def __init__(self):
+        super(HACommand,self).__init__({
+                       'on'         :{'primary' : {
+                                                    'insteon':0x11,
+                                                    'x10':0x02,
+                                                    'upb':0x00
+                                                  }, 
+                                     'secondary' : {
+                                                    'insteon':0xff,
+                                                    'x10':None,
+                                                    'upb':None
+                                                    },
+                                     },
+                       'faston'    :{'primary' : {
+                                                    'insteon':0x12,
+                                                    'x10':0x02,
+                                                    'upb':0x00
+                                                  }, 
+                                     'secondary' : {
+                                                    'insteon':0xff,
+                                                    'x10':None,
+                                                    'upb':None
+                                                    },
+                                     },
+                       'off'         :{'primary' : {
+                                                    'insteon':0x13,
+                                                    'x10':0x03,
+                                                    'upb':0x00
+                                                  }, 
+                                     'secondary' : {
+                                                    'insteon':0x00,
+                                                    'x10':None,
+                                                    'upb':None
+                                                    },
+                                     },
+        
+                       'fastoff'    :{'primary' : {
+                                                    'insteon':0x14,
+                                                    'x10':0x03,
+                                                    'upb':0x00
+                                                  }, 
+                                     'secondary' : {
+                                                    'insteon':0x00,
+                                                    'x10':None,
+                                                    'upb':None
+                                                    },
+                                     },
+                       'level'    :{'primary' : {
+                                                    'insteon':0x11,
+                                                    'x10':0x0a,
+                                                    'upb':0x00
+                                                  }, 
+                                     'secondary' : {
+                                                    'insteon':0x88,
+                                                    'x10':None,
+                                                    'upb':None
+                                                    },
+                                     },
+                       }
+                      )
+        pass
+
+class HAInterface(threading.Thread):
     "Base protocol interface"
+
     def __init__(self, interface):
-        super(HAProtocol,self).__init__()
-    
-    def onReceive(self, callback):
+        super(HAInterface,self).__init__()
+    def onCommand(self,callback):
         raise NotImplemented
-    def turnOn(self, deviceId):
+    def command(self,deviceId,command):
         raise NotImplemented
-    def turnOff(self, deviceId):
-        raise NotImplemented
+        
         
 import time
 import re

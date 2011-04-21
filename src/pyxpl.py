@@ -29,9 +29,9 @@ Notes:
 Created on Mar 26, 2011
 '''
 
-from ha_common import HAProtocol
+from ha_common import HAInterface
 
-class PyxPL(HAProtocol):
+class PyxPL(HAInterface):
     def __init__(self,interface):
         super(PyxPL,self).__init__(interface)
         self.__i = interface

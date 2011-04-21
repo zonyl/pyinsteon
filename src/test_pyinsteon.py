@@ -4,7 +4,7 @@ Created on Mar 26, 2011
 @author: jason@sharpee.com
 '''
 import unittest
-from pyinsteon import PyInsteon, TCP
+from pyinsteon import InsteonPLM, TCP
 #from mock import Mock
 
 
@@ -13,9 +13,9 @@ class TestPyInsteon(unittest.TestCase):
 
     def setUp(self):
 #        mockTCP = Mock()
-#        self.__insteon = PyInsteon(mockTCP)
+#        self.__insteon = InsteonPLM(mockTCP)
 
-        self.__insteon = PyInsteon(TCP('192.168.13.146', 9761))
+        self.__insteon = InsteonPLM(TCP('192.168.13.146', 9761))
         pass
 
 

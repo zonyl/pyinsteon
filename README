@@ -26,16 +26,7 @@ Usage:
     - ?
     - Profit
 
-Example: (see bottom of file) 
-
-    def x10_received(houseCode, unitCode, commandCode):
-        print 'X10 Received: %s%s->%s' % (houseCode, unitCode, commandCode)
-
-    def insteon_received(*params):
-        print 'Insteon REceived:', params
-
-    pyI = PyInsteon(TCP('192.168.0.1', 9671))
-    select.select([],[],[])   
+Example: (see bottom of PyInsteon.py file) 
 
 Notes:
     - Todo: Read Style Guide @: http://www.python.org/dev/peps/pep-0008/
